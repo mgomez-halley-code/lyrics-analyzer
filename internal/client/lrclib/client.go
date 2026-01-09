@@ -1,4 +1,4 @@
-package client
+package lrclib
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/client"
 )
 
 // Sentinel errors for specific cases
@@ -15,15 +17,15 @@ var (
 	ErrLyricsNotFound = errors.New("no lyrics found for the given criteria")
 )
 
-// LRCLibClient handles communication with LRCLib API
-type LRCLibClient struct {
+// Client handles communication with LRCLib API
+type Client struct {
 	baseURL    string
 	httpClient *http.Client
 }
 
-// NewLRCLibClient creates a new LRCLib client
-func NewLRCLibClient(baseURL string, timeout time.Duration) *LRCLibClient {
-	return &LRCLibClient{
+// NewClient creates a new LRCLib client
+func NewClient(baseURL string, timeout time.Duration) *Client {
+	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
@@ -31,9 +33,9 @@ func NewLRCLibClient(baseURL string, timeout time.Duration) *LRCLibClient {
 	}
 }
 
-// LRCLibResponse represents the raw response from LRCLib API
+// Response represents the raw response from LRCLib API
 // Based on official docs: https://lrclib.net/docs
-type LRCLibResponse struct {
+type Response struct {
 	ID           int     `json:"id"`
 	TrackName    string  `json:"trackName"`
 	ArtistName   string  `json:"artistName"`
@@ -42,18 +44,6 @@ type LRCLibResponse struct {
 	Instrumental bool    `json:"instrumental"`
 	SyncedLyrics string  `json:"syncedLyrics"`
 	PlainLyrics  string  `json:"plainLyrics"`
-}
-
-// LyricsData is our internal representation after fetching from API
-type LyricsData struct {
-	TrackID      int
-	TrackName    string
-	ArtistName   string
-	AlbumName    string
-	Duration     int
-	Instrumental bool
-	SyncedLyrics string
-	PlainLyrics  string
 }
 
 // APIError represents an error from the LRCLib API
@@ -66,8 +56,14 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("API error (status %d): %s", e.StatusCode, e.Message)
 }
 
+// ShouldRetry implements client.RetryableError interface
+// Returns true for server errors (5xx), false for client errors (4xx)
+func (e *APIError) ShouldRetry() bool {
+	return e.StatusCode >= 500
+}
+
 // GetLyrics fetches lyrics for a track and artist
-func (c *LRCLibClient) GetLyrics(ctx context.Context, track, artist string) (*LyricsData, error) {
+func (c *Client) GetLyrics(ctx context.Context, track, artist string) (*client.LyricsData, error) {
 	// Build URL with query parameters
 	apiURL := fmt.Sprintf("%s/api/search", c.baseURL)
 	params := url.Values{}
@@ -118,7 +114,7 @@ func (c *LRCLibClient) GetLyrics(ctx context.Context, track, artist string) (*Ly
 	}
 
 	// Parse response body - only reached if status is 200 OK
-	var results []LRCLibResponse
+	var results []Response
 	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -129,7 +125,7 @@ func (c *LRCLibClient) GetLyrics(ctx context.Context, track, artist string) (*Ly
 
 	bestResult := c.selectBestResult(results)
 
-	return &LyricsData{
+	return &client.LyricsData{
 		TrackID:      bestResult.ID,
 		TrackName:    bestResult.TrackName,
 		ArtistName:   bestResult.ArtistName,
@@ -143,7 +139,7 @@ func (c *LRCLibClient) GetLyrics(ctx context.Context, track, artist string) (*Ly
 
 // selectBestResult chooses the best match from multiple results
 // Prefers results with synced lyrics over plain-only lyrics
-func (c *LRCLibClient) selectBestResult(results []LRCLibResponse) LRCLibResponse {
+func (c *Client) selectBestResult(results []Response) Response {
 	for _, result := range results {
 		if result.SyncedLyrics != "" {
 			return result

@@ -9,6 +9,31 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// mockAPIError is a test error that implements RetryableError
+type mockAPIError struct {
+	statusCode int
+	message    string
+}
+
+func (e *mockAPIError) Error() string {
+	return e.message
+}
+
+func (e *mockAPIError) ShouldRetry() bool {
+	return e.statusCode >= 500
+}
+
+// mockNotFoundError simulates a non-retryable error that implements RetryableError
+type mockNotFoundError struct{}
+
+func (e *mockNotFoundError) Error() string {
+	return "mock: lyrics not found"
+}
+
+func (e *mockNotFoundError) ShouldRetry() bool {
+	return false
+}
+
 // mockClient is a test mock that implements LyricsClient
 type mockClient struct {
 	callCount int
@@ -52,8 +77,8 @@ func TestRetryDecorator_ServerErrorThenSuccess(t *testing.T) {
 	mock := &mockClient{
 		responses: []*LyricsData{nil, nil, expectedLyrics},
 		errors: []error{
-			&APIError{StatusCode: 500},
-			&APIError{StatusCode: 503},
+			&mockAPIError{statusCode: 500, message: "internal server error"},
+			&mockAPIError{statusCode: 503, message: "service unavailable"},
 			nil,
 		},
 	}
@@ -76,22 +101,23 @@ func TestRetryDecorator_ServerErrorThenSuccess(t *testing.T) {
 func TestRetryDecorator_NoRetryOnNotFound(t *testing.T) {
 	t.Parallel()
 
+	notFoundErr := &mockNotFoundError{}
 	mock := &mockClient{
 		responses: []*LyricsData{nil, nil},
-		errors:    []error{ErrLyricsNotFound, nil},
+		errors:    []error{notFoundErr, nil},
 	}
 
 	retryClient := NewRetryDecorator(mock, DefaultRetryConfig())
 	_, err := retryClient.GetLyrics(context.Background(), "Test Song", "Test Artist")
 
-	assert.ErrorIs(t, err, ErrLyricsNotFound)
+	assert.Error(t, err)
 	assert.Equal(t, 1, mock.callCount, "Should not retry on 404/Sentinel error")
 }
 
 func TestRetryDecorator_ExhaustsRetries(t *testing.T) {
 	t.Parallel()
 
-	serverError := &APIError{StatusCode: 500}
+	serverError := &mockAPIError{statusCode: 500, message: "internal server error"}
 	mock := &mockClient{
 		responses: []*LyricsData{nil, nil, nil, nil},
 		errors:    []error{serverError, serverError, serverError, serverError},
@@ -116,7 +142,11 @@ func TestRetryDecorator_ContextCancellation(t *testing.T) {
 
 	mock := &mockClient{
 		responses: []*LyricsData{nil, nil, nil},
-		errors:    []error{&APIError{StatusCode: 500}, &APIError{StatusCode: 500}, &APIError{StatusCode: 500}},
+		errors: []error{
+			&mockAPIError{statusCode: 500, message: "internal server error"},
+			&mockAPIError{statusCode: 500, message: "internal server error"},
+			&mockAPIError{statusCode: 500, message: "internal server error"},
+		},
 	}
 
 	config := RetryConfig{

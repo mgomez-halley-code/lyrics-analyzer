@@ -75,17 +75,24 @@ func (r *RetryDecorator) GetLyrics(ctx context.Context, track, artist string) (*
 	return nil, lastErr
 }
 
+// RetryableError interface for errors that can indicate retryability
+type RetryableError interface {
+	error
+	ShouldRetry() bool
+}
+
 // shouldRetry determines if an error is retryable
 func (r *RetryDecorator) shouldRetry(err error) bool {
-	// Don't retry client-side errors
-	if errors.Is(err, ErrLyricsNotFound) {
-		return false
+	// Check if error implements RetryableError interface
+	var retryableErr RetryableError
+	if errors.As(err, &retryableErr) {
+		return retryableErr.ShouldRetry()
 	}
 
-	// Retry on server errors (500, 503) and network errors
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode >= 500
+	// Default: retry on network/unknown errors
+	// Don't retry on wrapped context errors
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
 	}
 
 	return true

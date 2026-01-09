@@ -1,4 +1,4 @@
-package client
+package lrclib
 
 import (
 	"context"
@@ -67,7 +67,7 @@ func TestGetLyrics_Logic(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := NewLRCLibClient(server.URL, 5*time.Second)
+			client := NewClient(server.URL, 5*time.Second)
 			lyrics, err := client.GetLyrics(context.Background(), "Test", "Artist")
 
 			if tt.expectError {
@@ -103,7 +103,7 @@ func TestGetLyrics_RequestValidation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewLRCLibClient(server.URL, 5*time.Second)
+	client := NewClient(server.URL, 5*time.Second)
 	_, err := client.GetLyrics(context.Background(), "Señorita", "Shawn Mendes")
 	assert.NoError(t, err)
 }
@@ -118,7 +118,7 @@ func TestGetLyrics_Context(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewLRCLibClient(server.URL, 5*time.Second)
+	client := NewClient(server.URL, 5*time.Second)
 
 	t.Run("Timeout", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
