@@ -49,11 +49,18 @@ func TestGetLyrics_Logic(t *testing.T) {
 			errorContains: "failed to parse response",
 		},
 		{
+			name:          "Client Error - 422 Status",
+			statusCode:    http.StatusUnprocessableEntity,
+			responseBody:  `Validation failed`,
+			expectError:   true,
+			errorContains: "Client error: 422",
+		},
+		{
 			name:          "Server Error - 500 Status",
 			statusCode:    http.StatusInternalServerError,
 			responseBody:  `Internal error`,
 			expectError:   true,
-			errorContains: "LRCLib server error", // Match your struct exactly
+			errorContains: "LRCLib server error",
 		},
 	}
 
