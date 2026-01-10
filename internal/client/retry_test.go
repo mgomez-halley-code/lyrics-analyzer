@@ -53,88 +53,128 @@ func (m *mockClient) GetLyrics(ctx context.Context, track, artist string) (*Lyri
 	return response, err
 }
 
-func TestRetryDecorator_SuccessFirstAttempt(t *testing.T) {
-	t.Parallel()
-
-	expectedLyrics := &LyricsData{TrackID: 123, TrackName: "Test Song"}
-	mock := &mockClient{
-		responses: []*LyricsData{expectedLyrics},
-		errors:    []error{nil},
-	}
-
-	retryClient := NewRetryDecorator(mock, DefaultRetryConfig())
-	lyrics, err := retryClient.GetLyrics(context.Background(), "Test Song", "Test Artist")
-
-	assert.NoError(t, err)
-	assert.Equal(t, expectedLyrics, lyrics)
-	assert.Equal(t, 1, mock.callCount)
-}
-
-func TestRetryDecorator_ServerErrorThenSuccess(t *testing.T) {
-	t.Parallel()
-
-	expectedLyrics := &LyricsData{TrackID: 123}
-	mock := &mockClient{
-		responses: []*LyricsData{nil, nil, expectedLyrics},
-		errors: []error{
-			&mockAPIError{statusCode: 500, message: "internal server error"},
-			&mockAPIError{statusCode: 503, message: "service unavailable"},
-			nil,
+func TestRetryDecorator_GetLyrics(t *testing.T) {
+	tests := []struct {
+		name             string
+		responses        []*LyricsData
+		errors           []error
+		maxRetries       int
+		initialBackoff   time.Duration
+		expectedCalls    int
+		shouldError      bool
+		expectedResponse *LyricsData
+	}{
+		{
+			name:             "success first attempt",
+			responses:        []*LyricsData{{TrackID: 123, TrackName: "Test Song"}},
+			errors:           []error{nil},
+			maxRetries:       3,
+			initialBackoff:   10 * time.Millisecond,
+			expectedCalls:    1,
+			shouldError:      false,
+			expectedResponse: &LyricsData{TrackID: 123, TrackName: "Test Song"},
+		},
+		{
+			name: "retry 2 times then success",
+			responses: []*LyricsData{
+				nil,
+				nil,
+				{TrackID: 123},
+			},
+			errors: []error{
+				&mockAPIError{statusCode: 500, message: "internal server error"},
+				&mockAPIError{statusCode: 503, message: "service unavailable"},
+				nil,
+			},
+			maxRetries:       3,
+			initialBackoff:   10 * time.Millisecond,
+			expectedCalls:    3,
+			shouldError:      false,
+			expectedResponse: &LyricsData{TrackID: 123},
+		},
+		{
+			name:           "no retry on 404 not found",
+			responses:      []*LyricsData{nil, nil},
+			errors:         []error{&mockNotFoundError{}, nil},
+			maxRetries:     3,
+			initialBackoff: 10 * time.Millisecond,
+			expectedCalls:  1,
+			shouldError:    true,
+		},
+		{
+			name: "exhaust all retries",
+			responses: []*LyricsData{
+				nil,
+				nil,
+				nil,
+				nil,
+			},
+			errors: []error{
+				&mockAPIError{statusCode: 500, message: "internal server error"},
+				&mockAPIError{statusCode: 500, message: "internal server error"},
+				&mockAPIError{statusCode: 500, message: "internal server error"},
+				&mockAPIError{statusCode: 500, message: "internal server error"},
+			},
+			maxRetries:     3,
+			initialBackoff: 1 * time.Millisecond,
+			expectedCalls:  4, // Initial call + 3 retries
+			shouldError:    true,
+		},
+		{
+			name: "different 5xx errors all retry",
+			responses: []*LyricsData{
+				nil,
+				nil,
+				nil,
+				{TrackID: 456},
+			},
+			errors: []error{
+				&mockAPIError{statusCode: 500, message: "internal server error"},
+				&mockAPIError{statusCode: 502, message: "bad gateway"},
+				&mockAPIError{statusCode: 503, message: "service unavailable"},
+				nil,
+			},
+			maxRetries:       3,
+			initialBackoff:   1 * time.Millisecond,
+			expectedCalls:    4,
+			shouldError:      false,
+			expectedResponse: &LyricsData{TrackID: 456},
 		},
 	}
 
-	config := RetryConfig{
-		MaxRetries:     3,
-		InitialBackoff: 10 * time.Millisecond,
-		MaxBackoff:     100 * time.Millisecond,
-		Multiplier:     2.0,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mock := &mockClient{
+				responses: tt.responses,
+				errors:    tt.errors,
+			}
+
+			config := RetryConfig{
+				MaxRetries:     tt.maxRetries,
+				InitialBackoff: tt.initialBackoff,
+				MaxBackoff:     100 * time.Millisecond,
+				Multiplier:     2.0,
+			}
+
+			retryClient := NewRetryDecorator(mock, config)
+			lyrics, err := retryClient.GetLyrics(context.Background(), "Test Song", "Test Artist")
+
+			assert.Equal(t, tt.expectedCalls, mock.callCount)
+
+			if tt.shouldError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tt.expectedResponse != nil {
+					assert.Equal(t, tt.expectedResponse, lyrics)
+				} else {
+					assert.NotNil(t, lyrics)
+				}
+			}
+		})
 	}
-
-	retryClient := NewRetryDecorator(mock, config)
-	lyrics, err := retryClient.GetLyrics(context.Background(), "Test Song", "Test Artist")
-
-	assert.NoError(t, err)
-	assert.NotNil(t, lyrics)
-	assert.Equal(t, 3, mock.callCount)
-}
-
-func TestRetryDecorator_NoRetryOnNotFound(t *testing.T) {
-	t.Parallel()
-
-	notFoundErr := &mockNotFoundError{}
-	mock := &mockClient{
-		responses: []*LyricsData{nil, nil},
-		errors:    []error{notFoundErr, nil},
-	}
-
-	retryClient := NewRetryDecorator(mock, DefaultRetryConfig())
-	_, err := retryClient.GetLyrics(context.Background(), "Test Song", "Test Artist")
-
-	assert.Error(t, err)
-	assert.Equal(t, 1, mock.callCount, "Should not retry on 404/Sentinel error")
-}
-
-func TestRetryDecorator_ExhaustsRetries(t *testing.T) {
-	t.Parallel()
-
-	serverError := &mockAPIError{statusCode: 500, message: "internal server error"}
-	mock := &mockClient{
-		responses: []*LyricsData{nil, nil, nil, nil},
-		errors:    []error{serverError, serverError, serverError, serverError},
-	}
-
-	config := RetryConfig{
-		MaxRetries:     3,
-		InitialBackoff: 1 * time.Millisecond,
-		MaxBackoff:     10 * time.Millisecond,
-		Multiplier:     2.0,
-	}
-
-	retryClient := NewRetryDecorator(mock, config)
-	_, err := retryClient.GetLyrics(context.Background(), "Test Song", "Test Artist")
-
-	assert.Error(t, err)
-	assert.Equal(t, 4, mock.callCount, "Initial call + 3 retries")
 }
 
 func TestRetryDecorator_ContextCancellation(t *testing.T) {
