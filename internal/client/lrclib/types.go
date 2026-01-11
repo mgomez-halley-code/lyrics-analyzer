@@ -8,6 +8,7 @@ import (
 // Sentinel errors for specific cases
 var (
 	ErrLyricsNotFound = errors.New("no lyrics found for the given criteria")
+	ErrRateLimited    = errors.New("rate limit exceeded")
 )
 
 // SearchResponse represents the raw response from LRCLib search API

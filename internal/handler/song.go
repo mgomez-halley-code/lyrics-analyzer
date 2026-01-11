@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -48,41 +49,22 @@ func (h *SongHandler) handleServiceError(w http.ResponseWriter, track, artist st
 	code := "internal_error"
 	message := "Failed to analyze song"
 
-	// Use type assertions for structured error handling
-	var notFoundErr *NotFoundError
-	var rateLimitErr *RateLimitError
-	var timeoutErr *TimeoutError
-
+	// Type-safe error handling with errors.Is()
 	switch {
-	case errors.As(err, &notFoundErr):
+	case errors.Is(err, model.ErrNotFound):
 		statusCode = http.StatusNotFound
 		code = "not_found"
 		message = "Song not found"
-	case errors.As(err, &rateLimitErr):
+	case errors.Is(err, model.ErrRateLimited):
 		statusCode = http.StatusTooManyRequests
 		code = "rate_limited"
 		message = "Too many requests to lyrics provider"
-	case errors.As(err, &timeoutErr):
+	case errors.Is(err, context.DeadlineExceeded):
 		statusCode = http.StatusGatewayTimeout
 		code = "timeout"
 		message = "The request timed out"
 	default:
-		// Fallback to string matching for backwards compatibility with existing errors
-		errStr := err.Error()
-		switch {
-		case strings.Contains(errStr, "no results found") || strings.Contains(errStr, "not found"):
-			statusCode = http.StatusNotFound
-			code = "not_found"
-			message = "Song not found"
-		case strings.Contains(errStr, "rate limit"):
-			statusCode = http.StatusTooManyRequests
-			code = "rate_limited"
-			message = "Too many requests to lyrics provider"
-		case strings.Contains(errStr, "context deadline exceeded") || strings.Contains(errStr, "timeout"):
-			statusCode = http.StatusGatewayTimeout
-			code = "timeout"
-			message = "The request timed out"
-		}
+		// Use default: HTTP 500 Internal Server Error
 	}
 
 	h.respondError(w, statusCode, code, message, map[string]string{

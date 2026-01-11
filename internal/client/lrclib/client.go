@@ -33,6 +33,9 @@ func (c *Client) checkResponseStatus(resp *http.Response) error {
 	case http.StatusNotFound:
 		return ErrLyricsNotFound
 
+	case http.StatusTooManyRequests:
+		return ErrRateLimited
+
 	case http.StatusInternalServerError:
 		return &APIError{StatusCode: resp.StatusCode, Message: "LRCLib server error"}
 
