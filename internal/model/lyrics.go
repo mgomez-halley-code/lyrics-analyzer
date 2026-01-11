@@ -28,13 +28,3 @@ type Chorus struct {
 type Structure struct {
 	Chorus *Chorus `json:"chorus"`
 }
-
-// Statistics contains lyrics statistics
-type Statistics struct {
-	TotalLines          int     `json:"totalLines"`
-	UniqueLines         int     `json:"uniqueLines"`
-	TotalWords          int     `json:"totalWords"`
-	UniqueWords         int     `json:"uniqueWords"`
-	AverageWordsPerLine float64 `json:"averageWordsPerLine"`
-	RepetitionRatio     float64 `json:"repetitionRatio"`
-}

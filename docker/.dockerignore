@@ -1,0 +1,39 @@
+# Git files
+.git
+.gitignore
+
+# Documentation
+*.md
+TESTING.md
+
+# Docker files
+docker/
+Dockerfile
+docker-compose*.yml
+
+# Development files
+.env
+.env.local
+*.log
+
+# Build artifacts
+*.exe
+lyrics-analyzer
+lyrics-analyzer.exe
+
+# Test files
+*_test.go
+test/
+
+# IDE files
+.vscode/
+.idea/
+
+# Scripts
+scripts/
+
+# Temporary files
+tmp/
+temp/
+nul
+test_cache.sh

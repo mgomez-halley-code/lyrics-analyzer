@@ -4,11 +4,10 @@ import "time"
 
 // SongAnalysisResponse is the main API response
 type SongAnalysisResponse struct {
-	Track      Track       `json:"track"`
-	Lyrics     *LyricsData `json:"lyrics,omitempty"`
-	Structure  *Structure  `json:"structure,omitempty"`
-	Statistics *Statistics `json:"statistics,omitempty"`
-	Metadata   Metadata    `json:"metadata"`
+	Track     Track       `json:"track"`
+	Lyrics    *LyricsData `json:"lyrics,omitempty"`
+	Structure *Structure  `json:"structure,omitempty"`
+	Metadata  Metadata    `json:"metadata"`
 }
 
 // Metadata contains response metadata

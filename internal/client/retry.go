@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/model"
+	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/service"
 )
 
 // RetryConfig holds configuration for the retry decorator
@@ -28,21 +29,21 @@ func DefaultRetryConfig() RetryConfig {
 	}
 }
 
-// RetryDecorator wraps a LyricsClient with retry logic and exponential backoff
+// RetryDecorator wraps a LyricsProvider with retry logic and exponential backoff
 type RetryDecorator struct {
-	client LyricsClient
+	client service.LyricsProvider
 	config RetryConfig
 }
 
 // NewRetryDecorator creates a new retry decorator
-func NewRetryDecorator(client LyricsClient, config RetryConfig) *RetryDecorator {
+func NewRetryDecorator(client service.LyricsProvider, config RetryConfig) *RetryDecorator {
 	return &RetryDecorator{
 		client: client,
 		config: config,
 	}
 }
 
-// GetLyrics implements LyricsClient with retry logic
+// GetLyrics implements service.LyricsProvider with retry logic
 func (r *RetryDecorator) GetLyrics(ctx context.Context, track, artist string) (*model.LyricsSourceData, error) {
 	var lastErr error
 

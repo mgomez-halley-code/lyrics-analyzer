@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/cache"
 	client "github.com/mgomez-halley-code/lyrics-analyzer.git/internal/client"
 	lrclib "github.com/mgomez-halley-code/lyrics-analyzer.git/internal/client/lrclib"
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/config"
@@ -42,12 +43,27 @@ func main() {
 
 	retryClient := client.NewRetryDecorator(rawClient, retryCfg)
 
+	// Initialize cache
+	cacheInstance, err := cache.New(cache.Config{
+		Type:          cfg.CacheType,
+		RedisAddr:     cfg.RedisAddr,
+		RedisPassword: cfg.RedisPassword,
+		RedisDB:       cfg.RedisDB,
+	})
+	if err != nil {
+		log.Fatalf("failed to initialize cache: %v", err)
+	}
+	defer cacheInstance.Close()
+
+	// Wrap client with caching layer
+	cachingProvider := service.NewCachingProvider(retryClient, cacheInstance, cfg.CacheTTL)
+
 	// Parser and chorus detector used by the service
 	parser := service.NewParser()
 	chorusDetector := service.NewChorusDetector()
 
-	// Service
-	svc := service.NewLyricsService(retryClient, parser, chorusDetector)
+	// Service (use caching provider)
+	svc := service.NewLyricsService(cachingProvider, parser, chorusDetector)
 
 	// Build router and server
 	r := server.NewRouter(svc)

@@ -15,4 +15,6 @@ type LyricsSourceData struct {
 	Instrumental bool
 	SyncedLyrics string
 	PlainLyrics  string
+	// Cached indicates whether this DTO was served from cache
+	Cached       bool
 }
