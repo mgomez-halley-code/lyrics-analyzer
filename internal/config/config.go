@@ -11,10 +11,18 @@ type Config struct {
 	ServerAddr      string
 	LRCLibBaseURL   string
 	LRCLibTimeout   time.Duration
+	HTTPTimeout     time.Duration
 	RetryMaxRetries int
 	RetryBackoff    time.Duration
 	RetryMaxBackoff time.Duration
 	RetryMultiplier float64
+
+	// Cache configuration
+	CacheType     string        // "redis" or "none"
+	CacheTTL      time.Duration // How long to cache lyrics
+	RedisAddr     string
+	RedisPassword string
+	RedisDB       int
 }
 
 // Load reads configuration from environment variables with sensible defaults
@@ -23,10 +31,18 @@ func Load() (*Config, error) {
 		ServerAddr:      getEnv("SERVER_ADDR", ":8080"),
 		LRCLibBaseURL:   getEnv("LRCLIB_BASE_URL", "https://lrclib.net"),
 		LRCLibTimeout:   parseDurationOrDefault(getEnv("LRCLIB_TIMEOUT", "10s"), 10*time.Second),
+		HTTPTimeout:     parseDurationOrDefault(getEnv("HTTP_TIMEOUT", "30s"), 30*time.Second),
 		RetryMaxRetries: int(parseIntOrDefault(getEnv("RETRY_MAX_RETRIES", "3"), 3)),
 		RetryBackoff:    parseDurationOrDefault(getEnv("RETRY_BACKOFF", "100ms"), 100*time.Millisecond),
 		RetryMaxBackoff: parseDurationOrDefault(getEnv("RETRY_MAX_BACKOFF", "5s"), 5*time.Second),
 		RetryMultiplier: parseFloatOrDefault(getEnv("RETRY_MULTIPLIER", "2.0"), 2.0),
+
+		// Cache configuration
+		CacheType:     getEnv("CACHE_TYPE", "redis"), // Default to Redis cache
+		CacheTTL:      parseDurationOrDefault(getEnv("CACHE_TTL", "24h"), 24*time.Hour),
+		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword: getEnv("REDIS_PASSWORD", ""),
+		RedisDB:       int(parseIntOrDefault(getEnv("REDIS_DB", "0"), 0)),
 	}
 
 	return cfg, nil
