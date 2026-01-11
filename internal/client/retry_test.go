@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,11 +38,11 @@ func (e *mockNotFoundError) ShouldRetry() bool {
 // mockClient is a test mock that implements LyricsClient
 type mockClient struct {
 	callCount int
-	responses []*LyricsData
+	responses []*model.LyricsSourceData
 	errors    []error
 }
 
-func (m *mockClient) GetLyrics(ctx context.Context, track, artist string) (*LyricsData, error) {
+func (m *mockClient) GetLyrics(ctx context.Context, track, artist string) (*model.LyricsSourceData, error) {
 	if m.callCount >= len(m.responses) {
 		return nil, errors.New("mock: no more responses configured")
 	}
@@ -56,27 +57,27 @@ func (m *mockClient) GetLyrics(ctx context.Context, track, artist string) (*Lyri
 func TestRetryDecorator_GetLyrics(t *testing.T) {
 	tests := []struct {
 		name             string
-		responses        []*LyricsData
+		responses        []*model.LyricsSourceData
 		errors           []error
 		maxRetries       int
 		initialBackoff   time.Duration
 		expectedCalls    int
 		shouldError      bool
-		expectedResponse *LyricsData
+		expectedResponse *model.LyricsSourceData
 	}{
 		{
 			name:             "success first attempt",
-			responses:        []*LyricsData{{TrackID: 123, TrackName: "Test Song"}},
+			responses:        []*model.LyricsSourceData{{TrackID: 123, TrackName: "Test Song"}},
 			errors:           []error{nil},
 			maxRetries:       3,
 			initialBackoff:   10 * time.Millisecond,
 			expectedCalls:    1,
 			shouldError:      false,
-			expectedResponse: &LyricsData{TrackID: 123, TrackName: "Test Song"},
+			expectedResponse: &model.LyricsSourceData{TrackID: 123, TrackName: "Test Song"},
 		},
 		{
 			name: "retry 2 times then success",
-			responses: []*LyricsData{
+			responses: []*model.LyricsSourceData{
 				nil,
 				nil,
 				{TrackID: 123},
@@ -90,11 +91,11 @@ func TestRetryDecorator_GetLyrics(t *testing.T) {
 			initialBackoff:   10 * time.Millisecond,
 			expectedCalls:    3,
 			shouldError:      false,
-			expectedResponse: &LyricsData{TrackID: 123},
+			expectedResponse: &model.LyricsSourceData{TrackID: 123},
 		},
 		{
 			name:           "no retry on 404 not found",
-			responses:      []*LyricsData{nil, nil},
+			responses:      []*model.LyricsSourceData{nil, nil},
 			errors:         []error{&mockNotFoundError{}, nil},
 			maxRetries:     3,
 			initialBackoff: 10 * time.Millisecond,
@@ -103,7 +104,7 @@ func TestRetryDecorator_GetLyrics(t *testing.T) {
 		},
 		{
 			name: "exhaust all retries",
-			responses: []*LyricsData{
+			responses: []*model.LyricsSourceData{
 				nil,
 				nil,
 				nil,
@@ -122,7 +123,7 @@ func TestRetryDecorator_GetLyrics(t *testing.T) {
 		},
 		{
 			name: "different 5xx errors all retry",
-			responses: []*LyricsData{
+			responses: []*model.LyricsSourceData{
 				nil,
 				nil,
 				nil,
@@ -138,7 +139,7 @@ func TestRetryDecorator_GetLyrics(t *testing.T) {
 			initialBackoff:   1 * time.Millisecond,
 			expectedCalls:    4,
 			shouldError:      false,
-			expectedResponse: &LyricsData{TrackID: 456},
+			expectedResponse: &model.LyricsSourceData{TrackID: 456},
 		},
 	}
 
@@ -181,7 +182,7 @@ func TestRetryDecorator_ContextCancellation(t *testing.T) {
 	t.Parallel()
 
 	mock := &mockClient{
-		responses: []*LyricsData{nil, nil, nil},
+		responses: []*model.LyricsSourceData{nil, nil, nil},
 		errors: []error{
 			&mockAPIError{statusCode: 500, message: "internal server error"},
 			&mockAPIError{statusCode: 500, message: "internal server error"},

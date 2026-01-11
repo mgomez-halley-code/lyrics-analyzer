@@ -32,7 +32,6 @@ func TestParser_ParsePlainLyrics(t *testing.T) {
 
 				// Plain lyrics should have no timestamps
 				assert.Nil(t, lines[0].Timestamp)
-				assert.Nil(t, lines[0].Seconds)
 
 				// Check second line
 				assert.Equal(t, 2, lines[1].LineNumber)
@@ -143,7 +142,6 @@ func TestParser_ParsePlainLyrics(t *testing.T) {
 			// All plain lyrics should have nil timestamps
 			for _, line := range lines {
 				assert.Nil(t, line.Timestamp)
-				assert.Nil(t, line.Seconds)
 			}
 
 			if tt.validate != nil {

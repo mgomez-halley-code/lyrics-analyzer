@@ -28,19 +28,19 @@ func TestParser_ParseSyncedLyrics(t *testing.T) {
 				// Check first line
 				assert.Equal(t, 1, lines[0].LineNumber)
 				assert.Equal(t, "First line", lines[0].Text)
-				assert.Equal(t, 10.0, *lines[0].Seconds)
+				assert.Equal(t, "00:10.00", *lines[0].Timestamp)
 				assert.Equal(t, 2, lines[0].WordCount)
 
 				// Check second line
 				assert.Equal(t, 2, lines[1].LineNumber)
 				assert.Equal(t, "Second line", lines[1].Text)
-				assert.Equal(t, 15.5, *lines[1].Seconds)
+				assert.Equal(t, "00:15.50", *lines[1].Timestamp)
 				assert.Equal(t, 2, lines[1].WordCount)
 
 				// Check third line
 				assert.Equal(t, 3, lines[2].LineNumber)
 				assert.Equal(t, "Third line", lines[2].Text)
-				assert.Equal(t, 20.0, *lines[2].Seconds)
+				assert.Equal(t, "00:20.00", *lines[2].Timestamp)
 				assert.Equal(t, 2, lines[2].WordCount)
 			},
 		},
@@ -131,9 +131,9 @@ func TestParser_ParseSyncedLyrics(t *testing.T) {
 			expectedLines: 3,
 			validate: func(t *testing.T, lines []model.LyricLine) {
 				// Parser should preserve order, not sort
-				assert.Equal(t, 20.0, *lines[0].Seconds)
-				assert.Equal(t, 10.0, *lines[1].Seconds)
-				assert.Equal(t, 15.0, *lines[2].Seconds)
+				assert.Equal(t, "00:20.00", *lines[0].Timestamp)
+				assert.Equal(t, "00:10.00", *lines[1].Timestamp)
+				assert.Equal(t, "00:15.00", *lines[2].Timestamp)
 			},
 		},
 		{
@@ -145,8 +145,8 @@ func TestParser_ParseSyncedLyrics(t *testing.T) {
 			shouldError:   false,
 			expectedLines: 2,
 			validate: func(t *testing.T, lines []model.LyricLine) {
-				assert.Equal(t, 5999.99, *lines[0].Seconds)
-				assert.Equal(t, 6000.0, *lines[1].Seconds)
+				assert.Equal(t, "99:59.99", *lines[0].Timestamp)
+				assert.Equal(t, "100:00.00", *lines[1].Timestamp)
 			},
 		},
 		{
@@ -191,9 +191,9 @@ func TestParser_ParseSyncedLyrics(t *testing.T) {
 			shouldError:   false,
 			expectedLines: 3,
 			validate: func(t *testing.T, lines []model.LyricLine) {
-				assert.Equal(t, 10.0, *lines[0].Seconds)
-				assert.Equal(t, 15.5, *lines[1].Seconds)
-				assert.Equal(t, 20.123, *lines[2].Seconds)
+				assert.Equal(t, "00:10.000", *lines[0].Timestamp)
+				assert.Equal(t, "00:15.500", *lines[1].Timestamp)
+				assert.Equal(t, "00:20.123", *lines[2].Timestamp)
 			},
 		},
 		{
@@ -206,9 +206,9 @@ func TestParser_ParseSyncedLyrics(t *testing.T) {
 			shouldError:   false,
 			expectedLines: 3,
 			validate: func(t *testing.T, lines []model.LyricLine) {
-				assert.Equal(t, 10.0, *lines[0].Seconds)
-				assert.Equal(t, 15.5, *lines[1].Seconds)
-				assert.Equal(t, 20.99, *lines[2].Seconds)
+				assert.Equal(t, "00:10.00", *lines[0].Timestamp)
+				assert.Equal(t, "00:15.500", *lines[1].Timestamp)
+				assert.Equal(t, "00:20.99", *lines[2].Timestamp)
 			},
 		},
 	}

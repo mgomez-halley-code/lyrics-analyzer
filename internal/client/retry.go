@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/rand"
 	"time"
+
+	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/model"
 )
 
 // RetryConfig holds configuration for the retry decorator
@@ -41,7 +43,7 @@ func NewRetryDecorator(client LyricsClient, config RetryConfig) *RetryDecorator 
 }
 
 // GetLyrics implements LyricsClient with retry logic
-func (r *RetryDecorator) GetLyrics(ctx context.Context, track, artist string) (*LyricsData, error) {
+func (r *RetryDecorator) GetLyrics(ctx context.Context, track, artist string) (*model.LyricsSourceData, error) {
 	var lastErr error
 
 	for attempt := 0; attempt <= r.config.MaxRetries; attempt++ {

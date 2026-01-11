@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/client"
+	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/model"
 )
 
 // GetLyrics fetches lyrics for a track and artist
-func (c *Client) GetLyrics(ctx context.Context, track, artist string) (*client.LyricsData, error) {
+func (c *Client) GetLyrics(ctx context.Context, track, artist string) (*model.LyricsSourceData, error) {
 	// Build request
 	req, err := c.buildSearchRequest(ctx, track, artist)
 	if err != nil {
@@ -38,7 +38,7 @@ func (c *Client) GetLyrics(ctx context.Context, track, artist string) (*client.L
 
 	bestResult := c.selectBestResult(results)
 
-	return &client.LyricsData{
+	return &model.LyricsSourceData{
 		TrackID:      bestResult.ID,
 		TrackName:    bestResult.TrackName,
 		ArtistName:   bestResult.ArtistName,

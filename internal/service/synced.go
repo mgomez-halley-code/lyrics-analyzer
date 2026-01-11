@@ -36,7 +36,7 @@ func (p *Parser) ParseSyncedLyrics(syncedLyrics string) ([]model.LyricLine, erro
 
 		// Parse timestamp
 		timestamp := fmt.Sprintf("%s:%s", minutes, seconds)
-		timestampSeconds, err := p.ParseTimestamp(timestamp)
+		_, err := p.ParseTimestamp(timestamp)
 		if err != nil {
 			continue
 		}
@@ -47,7 +47,6 @@ func (p *Parser) ParseSyncedLyrics(syncedLyrics string) ([]model.LyricLine, erro
 		lyricLines = append(lyricLines, model.LyricLine{
 			LineNumber: lineNumber,
 			Timestamp:  &timestamp,
-			Seconds:    &timestampSeconds,
 			Text:       text,
 			WordCount:  wordCount,
 		})

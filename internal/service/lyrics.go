@@ -5,25 +5,24 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/client"
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/model"
 )
 
 // LyricsService orchestrates lyrics analysis
 type LyricsService struct {
-	lyricsClient   client.LyricsClient
+	lyricsProvider LyricsProvider
 	parser         *Parser
 	chorusDetector *ChorusDetector
 }
 
 // NewLyricsService creates a new lyrics service
 func NewLyricsService(
-	lyricsClient client.LyricsClient,
+	lyricsProvider LyricsProvider,
 	parser *Parser,
 	chorusDetector *ChorusDetector,
 ) *LyricsService {
 	return &LyricsService{
-		lyricsClient:   lyricsClient,
+		lyricsProvider: lyricsProvider,
 		parser:         parser,
 		chorusDetector: chorusDetector,
 	}
@@ -34,7 +33,7 @@ func (ls *LyricsService) AnalyzeSong(ctx context.Context, track, artist string) 
 	startTime := time.Now()
 
 	// Fetch lyrics from LRCLib API
-	lyricsData, err := ls.lyricsClient.GetLyrics(ctx, track, artist)
+	lyricsData, err := ls.lyricsProvider.GetLyrics(ctx, track, artist)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch lyrics: %w", err)
 	}
@@ -128,7 +127,7 @@ func (ls *LyricsService) AnalyzeSong(ctx context.Context, track, artist string) 
 }
 
 // parseLyrics handles lyrics parsing logic, returning lines, type, and timestamp flag
-func (ls *LyricsService) parseLyrics(lyricsData *client.LyricsData) ([]model.LyricLine, string, bool, error) {
+func (ls *LyricsService) parseLyrics(lyricsData *model.LyricsSourceData) ([]model.LyricLine, string, bool, error) {
 	// Prefer synced lyrics over plain
 	if lyricsData.SyncedLyrics != "" {
 		lines, err := ls.parser.ParseSyncedLyrics(lyricsData.SyncedLyrics)

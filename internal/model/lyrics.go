@@ -2,11 +2,10 @@ package model
 
 // LyricLine represents a single line of lyrics
 type LyricLine struct {
-	LineNumber int      `json:"lineNumber"`
-	Timestamp  *string  `json:"timestamp,omitempty"`
-	Seconds    *float64 `json:"seconds,omitempty"`
-	Text       string   `json:"text"`
-	WordCount  int      `json:"wordCount"`
+	LineNumber int     `json:"lineNumber"`
+	Timestamp  *string `json:"timestamp,omitempty"`
+	Text       string  `json:"text"`
+	WordCount  int     `json:"wordCount"`
 }
 
 // LyricsData contains structured lyrics information

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/client"
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -16,61 +15,61 @@ type MockLyricsClient struct {
 	mock.Mock
 }
 
-func (m *MockLyricsClient) GetLyrics(ctx context.Context, track, artist string) (*client.LyricsData, error) {
+func (m *MockLyricsClient) GetLyrics(ctx context.Context, track, artist string) (*model.LyricsSourceData, error) {
 	args := m.Called(ctx, track, artist)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*client.LyricsData), args.Error(1)
+	return args.Get(0).(*model.LyricsSourceData), args.Error(1)
 }
 
 func TestLyricsService_ParseLyrics(t *testing.T) {
 	tests := []struct {
-		name             string
-		syncedLyrics     string
-		plainLyrics      string
-		expectedType     string
+		name              string
+		syncedLyrics      string
+		plainLyrics       string
+		expectedType      string
 		expectedTimestamp bool
-		expectedLines    int
-		shouldBeNil      bool
+		expectedLines     int
+		shouldBeNil       bool
 		expectedFirstLine string
 	}{
 		{
-			name:             "synced lyrics",
-			syncedLyrics:     "[00:10.00] First line\n[00:15.50] Second line",
-			plainLyrics:      "",
-			expectedType:     model.LyricsTypeSynced,
+			name:              "synced lyrics",
+			syncedLyrics:      "[00:10.00] First line\n[00:15.50] Second line",
+			plainLyrics:       "",
+			expectedType:      model.LyricsTypeSynced,
 			expectedTimestamp: true,
-			expectedLines:    2,
-			shouldBeNil:      false,
+			expectedLines:     2,
+			shouldBeNil:       false,
 		},
 		{
-			name:             "plain lyrics",
-			syncedLyrics:     "",
-			plainLyrics:      "First line\nSecond line",
-			expectedType:     model.LyricsTypePlain,
+			name:              "plain lyrics",
+			syncedLyrics:      "",
+			plainLyrics:       "First line\nSecond line",
+			expectedType:      model.LyricsTypePlain,
 			expectedTimestamp: false,
-			expectedLines:    2,
-			shouldBeNil:      false,
+			expectedLines:     2,
+			shouldBeNil:       false,
 		},
 		{
-			name:             "prefer synced over plain",
-			syncedLyrics:     "[00:10.00] Synced line",
-			plainLyrics:      "Plain line",
-			expectedType:     model.LyricsTypeSynced,
+			name:              "prefer synced over plain",
+			syncedLyrics:      "[00:10.00] Synced line",
+			plainLyrics:       "Plain line",
+			expectedType:      model.LyricsTypeSynced,
 			expectedTimestamp: true,
-			expectedLines:    1,
-			shouldBeNil:      false,
+			expectedLines:     1,
+			shouldBeNil:       false,
 			expectedFirstLine: "Synced line",
 		},
 		{
-			name:             "no lyrics",
-			syncedLyrics:     "",
-			plainLyrics:      "",
-			expectedType:     "",
+			name:              "no lyrics",
+			syncedLyrics:      "",
+			plainLyrics:       "",
+			expectedType:      "",
 			expectedTimestamp: false,
-			expectedLines:    0,
-			shouldBeNil:      true,
+			expectedLines:     0,
+			shouldBeNil:       true,
 		},
 	}
 
@@ -81,7 +80,7 @@ func TestLyricsService_ParseLyrics(t *testing.T) {
 				parser: parser,
 			}
 
-			lyricsData := &client.LyricsData{
+			lyricsData := &model.LyricsSourceData{
 				SyncedLyrics: tt.syncedLyrics,
 				PlainLyrics:  tt.plainLyrics,
 			}
@@ -115,7 +114,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		service := NewLyricsService(mockClient, parser, chorusDetector)
 
 		ctx := context.Background()
-		lyricsData := &client.LyricsData{
+		lyricsData := &model.LyricsSourceData{
 			TrackID:      123,
 			TrackName:    "Test Song",
 			ArtistName:   "Test Artist",
@@ -150,7 +149,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		service := NewLyricsService(mockClient, parser, chorusDetector)
 
 		ctx := context.Background()
-		lyricsData := &client.LyricsData{
+		lyricsData := &model.LyricsSourceData{
 			TrackID:      123,
 			TrackName:    "Instrumental Track",
 			ArtistName:   "Test Artist",
@@ -182,7 +181,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		service := NewLyricsService(mockClient, parser, chorusDetector)
 
 		ctx := context.Background()
-		lyricsData := &client.LyricsData{
+		lyricsData := &model.LyricsSourceData{
 			TrackID:      123,
 			TrackName:    "No Lyrics Track",
 			ArtistName:   "Test Artist",
@@ -232,7 +231,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		service := NewLyricsService(mockClient, parser, chorusDetector)
 
 		ctx := context.Background()
-		lyricsData := &client.LyricsData{
+		lyricsData := &model.LyricsSourceData{
 			TrackID:      123,
 			TrackName:    "Song with Chorus",
 			ArtistName:   "Test Artist",
@@ -265,7 +264,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		service := NewLyricsService(mockClient, parser, nil)
 
 		ctx := context.Background()
-		lyricsData := &client.LyricsData{
+		lyricsData := &model.LyricsSourceData{
 			TrackID:      123,
 			TrackName:    "Test Song",
 			ArtistName:   "Test Artist",
