@@ -2,13 +2,34 @@
 
 ## Quick Start
 
-### 1. Start the Server
+### 1. Setup Environment (Optional)
 
 ```bash
-# Method 1: Run directly
+# Copy example config (optional - has sensible defaults)
+cp .env.example .env
+
+# Edit .env if needed (e.g., set REDIS_PASSWORD for local dev)
+```
+
+### 2. Start Redis (Optional for Caching)
+
+```bash
+# Development: Start Redis
+docker-compose -f docker/docker-compose.dev.yml up -d
+```
+
+**Note:** You can run without Redis using `CACHE_TYPE=none` (see below).
+
+### 3. Start the Server
+
+```bash
+# Method 1: Run with Redis cache (default)
 go run ./cmd/main.go
 
-# Method 2: Build and run
+# Method 2: Run without cache
+CACHE_TYPE=none go run ./cmd/main.go
+
+# Method 3: Build and run
 go build -o lyrics-analyzer ./cmd
 ./lyrics-analyzer
 ```
@@ -258,6 +279,19 @@ readinessProbe:
   initialDelaySeconds: 5
   periodSeconds: 5
 ```
+
+## Docker Production Testing
+
+**Prerequisites:** Create a `.env` file with `REDIS_PASSWORD` before running production Docker stack.
+
+```bash
+# Generate secure password
+echo "REDIS_PASSWORD=$(openssl rand -base64 32)" > .env
+```
+
+**Note:** The `.env` file is gitignored for security. This file is required for production deployment.
+
+🐳 **For complete Docker deployment instructions and cache testing, see [docker/README.md](docker/README.md)**
 
 ## Sample Test Songs
 

@@ -1,4 +1,4 @@
-# Rockbot Lyrics Service
+# Lyrics Analyzer Service
 
 Production-ready Go service that fetches, parses, and enriches song lyrics with timestamps and structure detection.
 
@@ -17,6 +17,10 @@ Production-ready Go service that fetches, parses, and enriches song lyrics with 
 - **Cache:** Redis 7 with LFU eviction
 - **Deployment:** Docker multi-stage builds
 - **Testing:** Table-driven tests with 29 test cases
+
+## Sequence Diagram
+
+![Lyrics Analyzer Architecture](lyrics-analyzer-diagram.png)
 
 ## Architecture
 
@@ -65,15 +69,36 @@ Client (lrclib) → Service (wrapping) → Handler (HTTP mapping)
 - ✅ Works with error wrapping (`%w`)
 - ✅ Follows Go best practices
 
+### 🏗️ Design Pattern Impact
+
+The architecture utilizes the following patterns to separate safety, infrastructure, and business logic:
+
+| Pattern | Component/Location | Impact & Purpose |
+| --- | --- | --- |
+| **Decorator** | `RetryDecorator`, `CachingProvider` | Wraps the base client to add **resiliency** (retries) and **performance** (caching) without modifying the original API request logic. |
+| **Factory** | `internal/cache/factory.go` | Provides a unified way to initialize different cache providers (Redis vs. Noop) based on environment variables. |
+| **Adapter** | `internal/client/lrclib/search.go` | Decouples the service from external changes by converting [LRCLib API](https://www.google.com/search?q=http://localhost:8080/api/song/analyze%3Ftrack%3DImagine%26artist%3DJohn%2520Lennon) responses into a standardized internal model. |
+| **Dependency Injection** | `main.go` / Constructors | Increases **testability** by injecting providers and parsers into the service at startup, allowing for easy mocking. |
+
+
 ## Quick Start
 
-### 1. Start Redis
+### 1. Setup Environment (Optional)
+
+```bash
+# Copy example config (optional - has sensible defaults)
+cp .env.example .env
+
+# Edit .env if needed (e.g., change REDIS_PASSWORD for local dev)
+```
+
+### 2. Start Redis
 
 ```bash
 docker-compose -f docker/docker-compose.dev.yml up -d
 ```
 
-### 2. Start the Server
+### 3. Start the Server
 
 ```bash
 # With Redis cache (default)
@@ -85,7 +110,7 @@ CACHE_TYPE=none go run ./cmd/main.go
 
 Server starts on `http://localhost:8080`
 
-### 3. Test Health Endpoint
+### 4. Test Health Endpoint
 
 ```bash
 curl http://localhost:8080/health
@@ -100,7 +125,7 @@ curl http://localhost:8080/health
 }
 ```
 
-### 4. Analyze a Song
+### 5. Analyze a Song
 
 ```bash
 curl "http://localhost:8080/api/song/analyze?track=Imagine&artist=John%20Lennon"
@@ -151,6 +176,21 @@ The service uses Redis for caching to improve performance:
 - **Async Writes:** Non-blocking cache writes
 - **Cache Hit Tracking:** Response includes `"cached": true/false`
 
+## 🛡️ Concurrency & Thread Safety
+
+The `lyrics-analyzer` is designed to be **stateless** and **thread-safe**, making it suitable for high-concurrency environments like Kubernetes or Docker Swarm. Below is a breakdown of how the system handles concurrent operations:
+
+### Concurrency Breakdown
+
+| Scenario | Safe? | Implementation Detail |
+| :--- | :--- | :--- |
+| **Multiple Reads** | ✅ Yes | Redis `GET` operations are inherently atomic. Multiple goroutines can safely fetch the same lyrics simultaneously. |
+| **Multiple Writes** | ✅ Yes | We follow a "last-write-wins" strategy. Since lyrics data for a specific track is idempotent, concurrent writes do not lead to corrupted states. |
+| **Read/Write Races** | ✅ Yes | The [Cache-aside pattern](https://github.com/mgomez-halley-code/lyrics-analyzer/blob/main/internal/service/caching_provider.go) used in the service naturally tolerates minor race conditions by falling back to the API. |
+| **Counter Increments** | ❌ No | Standard `GET/SET` flows would require Redis `INCR` or distributed locks. (Not currently used in this service). |
+| **Distributed Transactions** | ❌ No | Cross-key consistency is not guaranteed without `MULTI/EXEC` or distributed locking mechanisms. |
+
+
 ### Verify Caching Performance
 
 ```bash
@@ -197,18 +237,32 @@ docker-compose -f docker/docker-compose.dev.yml up -d
 
 ### Production (Full Stack)
 
+**Prerequisites:** Create a `.env` file with `REDIS_PASSWORD` (required for security).
+
 ```bash
-# Build and start API + Redis
-docker-compose -f docker/docker-compose.prod.yml up -d --build
+# 1. Set Redis password (REQUIRED)
+echo "REDIS_PASSWORD=$(openssl rand -base64 32)" > .env
 
-# View logs
-docker-compose -f docker/docker-compose.prod.yml logs -f
+# 2. Build and start API + Redis
+docker-compose -f docker/docker-compose.prod.yml --env-file .env up -d --build
 
-# Stop stack
-docker-compose -f docker/docker-compose.prod.yml down
+# 3. Verify health
+curl http://localhost:8080/health
 ```
 
-🐳 **For detailed Docker deployment instructions, see [docker/README.md](docker/README.md)**
+**Note:** The `.env` file is gitignored for security. Never commit passwords to version control.
+
+#### Inspect Redis Cache
+
+```bash
+export $(grep -v '^#' .env | xargs)
+
+docker-compose -f docker/docker-compose.dev.yml exec redis redis-cli -a $REDIS_PASSWORD KEYS "lyrics:*"
+docker-compose -f docker/docker-compose.dev.yml exec redis redis-cli -a $REDIS_PASSWORD GET "lyrics:<key>"
+docker-compose -f docker/docker-compose.dev.yml exec redis redis-cli -a $REDIS_PASSWORD FLUSHDB
+```
+
+🐳 **For complete deployment instructions, cache testing, and security verification, see [docker/README.md](docker/README.md)**
 
 ## Security & Production Considerations
 
@@ -251,8 +305,6 @@ Integrate **LLM APIs** (Claude, OpenAI, etc.) to classify songs by:
 ### Advanced Analytics
 - Lyrics statistics (word count, uniqueness, repetition ratio)
 - Sentiment analysis
-- Reading level and complexity metrics
-- Verse/bridge/pre-chorus detection
 
 All enhancements follow the existing provider pattern - simply implement the appropriate interface and register with the service layer.
 

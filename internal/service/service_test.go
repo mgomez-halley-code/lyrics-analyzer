@@ -77,6 +77,7 @@ func TestLyricsService_ParseLyrics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			parser := NewParser()
 			service := &LyricsService{
+				ctx:    context.Background(),
 				parser: parser,
 			}
 
@@ -111,7 +112,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		parser := NewParser()
 		chorusDetector := NewChorusDetector()
 
-		service := NewLyricsService(mockClient, parser, chorusDetector)
+		service := NewLyricsService(context.Background(), mockClient, parser, chorusDetector)
 
 		ctx := context.Background()
 		lyricsData := &model.LyricsSourceData{
@@ -146,7 +147,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		parser := NewParser()
 		chorusDetector := NewChorusDetector()
 
-		service := NewLyricsService(mockClient, parser, chorusDetector)
+		service := NewLyricsService(context.Background(), mockClient, parser, chorusDetector)
 
 		ctx := context.Background()
 		lyricsData := &model.LyricsSourceData{
@@ -178,7 +179,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		parser := NewParser()
 		chorusDetector := NewChorusDetector()
 
-		service := NewLyricsService(mockClient, parser, chorusDetector)
+		service := NewLyricsService(context.Background(), mockClient, parser, chorusDetector)
 
 		ctx := context.Background()
 		lyricsData := &model.LyricsSourceData{
@@ -208,7 +209,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		parser := NewParser()
 		chorusDetector := NewChorusDetector()
 
-		service := NewLyricsService(mockClient, parser, chorusDetector)
+		service := NewLyricsService(context.Background(), mockClient, parser, chorusDetector)
 
 		ctx := context.Background()
 		expectedError := errors.New("client error")
@@ -228,7 +229,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		parser := NewParser()
 		chorusDetector := NewChorusDetector()
 
-		service := NewLyricsService(mockClient, parser, chorusDetector)
+		service := NewLyricsService(context.Background(), mockClient, parser, chorusDetector)
 
 		ctx := context.Background()
 		lyricsData := &model.LyricsSourceData{
@@ -261,7 +262,7 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		parser := NewParser()
 
 		// Create service without chorus detector (nil)
-		service := NewLyricsService(mockClient, parser, nil)
+		service := NewLyricsService(context.Background(), mockClient, parser, nil)
 
 		ctx := context.Background()
 		lyricsData := &model.LyricsSourceData{
@@ -290,14 +291,14 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		mockClient.AssertExpectations(t)
 	})
 
-	t.Run("context cancellation", func(t *testing.T) {
+	t.Run("request context cancellation", func(t *testing.T) {
 		mockClient := new(MockLyricsClient)
 		parser := NewParser()
 		chorusDetector := NewChorusDetector()
 
-		service := NewLyricsService(mockClient, parser, chorusDetector)
+		service := NewLyricsService(context.Background(), mockClient, parser, chorusDetector)
 
-		// Create a cancelled context
+		// Create a cancelled request context
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
@@ -310,5 +311,26 @@ func TestLyricsService_AnalyzeSong(t *testing.T) {
 		assert.Nil(t, response)
 		assert.Contains(t, err.Error(), "failed to fetch lyrics")
 		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("service context cancellation", func(t *testing.T) {
+		mockClient := new(MockLyricsClient)
+		parser := NewParser()
+		chorusDetector := NewChorusDetector()
+
+		// Create a cancelled service context
+		serviceCtx, serviceCancel := context.WithCancel(context.Background())
+		serviceCancel() // Cancel service context
+
+		service := NewLyricsService(serviceCtx, mockClient, parser, chorusDetector)
+
+		// Request context is still valid
+		ctx := context.Background()
+
+		response, err := service.AnalyzeSong(ctx, "Test Song", "Test Artist")
+
+		assert.Error(t, err)
+		assert.Nil(t, response)
+		assert.Contains(t, err.Error(), "service is shutting down")
 	})
 }

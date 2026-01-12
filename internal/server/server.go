@@ -18,14 +18,11 @@ func NewRouter(svc *service.LyricsService) http.Handler {
 	healthHandler := handler.NewHealthHandler("1.0.0")
 
 	api := r.PathPrefix("/api").Subrouter()
-
+	// Gorilla Mux handles the 405 Method Not Allowed automatically
 	api.HandleFunc("/song/analyze", songHandler.Analyze).Methods(http.MethodGet)
-
-	// Health check endpoint
 	r.HandleFunc("/health", healthHandler.Handle).Methods(http.MethodGet)
 
 	r.Use(loggingMiddleware)
-
 	return r
 }
 

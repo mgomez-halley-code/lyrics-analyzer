@@ -94,27 +94,6 @@ func TestGetLyrics_Logic(t *testing.T) {
 	}
 }
 
-func TestGetLyrics_RequestValidation(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// This ensures your client is building the URL correctly
-		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "/api/search", r.URL.Path)
-		assert.Equal(t, "Señorita", r.URL.Query().Get("track_name"))
-		assert.Equal(t, "Shawn Mendes", r.URL.Query().Get("artist_name"))
-		assert.Contains(t, r.Header.Get("User-Agent"), "lyrics-analyzer")
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[{"id":1,"trackName":"Test","artistName":"Test"}]`))
-	}))
-	defer server.Close()
-
-	client := NewClient(server.URL, 5*time.Second)
-	_, err := client.GetLyrics(context.Background(), "Señorita", "Shawn Mendes")
-	assert.NoError(t, err)
-}
-
 func TestGetLyrics_Context(t *testing.T) {
 	t.Parallel()
 

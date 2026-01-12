@@ -43,28 +43,23 @@ func NewRetryDecorator(client service.LyricsProvider, config RetryConfig) *Retry
 	}
 }
 
-// GetLyrics implements service.LyricsProvider with retry logic
-func (r *RetryDecorator) GetLyrics(ctx context.Context, track, artist string) (*model.LyricsSourceData, error) {
+// Helper to centralize the retry loop logic
+func (r *RetryDecorator) executeWithRetry(ctx context.Context, operation func() (any, error)) (any, error) {
 	var lastErr error
 
 	for attempt := 0; attempt <= r.config.MaxRetries; attempt++ {
-		lyrics, err := r.client.GetLyrics(ctx, track, artist)
-
+		result, err := operation()
 		if err == nil {
-			return lyrics, nil
+			return result, nil
 		}
 
-		// Don't retry on certain errors
 		if !r.shouldRetry(err) {
 			return nil, err
 		}
 
 		lastErr = err
-
 		if attempt < r.config.MaxRetries {
 			backoff := r.calculateBackoff(attempt)
-
-			// Check if context is already cancelled
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -73,9 +68,18 @@ func (r *RetryDecorator) GetLyrics(ctx context.Context, track, artist string) (*
 			}
 		}
 	}
-
-	// All retries exhausted
 	return nil, lastErr
+}
+
+// GetLyrics now uses the helper for a cleaner implementation
+func (r *RetryDecorator) GetLyrics(ctx context.Context, track, artist string) (*model.LyricsSourceData, error) {
+	res, err := r.executeWithRetry(ctx, func() (any, error) {
+		return r.client.GetLyrics(ctx, track, artist)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res.(*model.LyricsSourceData), nil
 }
 
 // RetryableError interface for errors that can indicate retryability

@@ -12,18 +12,21 @@ import (
 
 // LyricsService orchestrates lyrics analysis
 type LyricsService struct {
+	ctx            context.Context // Base context for service lifecycle
 	lyricsProvider LyricsProvider
 	parser         *Parser
 	chorusDetector *ChorusDetector
 }
 
-// NewLyricsService creates a new lyrics service
+// NewLyricsService creates a new lyrics service with a base context for lifecycle management
 func NewLyricsService(
+	ctx context.Context,
 	lyricsProvider LyricsProvider,
 	parser *Parser,
 	chorusDetector *ChorusDetector,
 ) *LyricsService {
 	return &LyricsService{
+		ctx:            ctx,
 		lyricsProvider: lyricsProvider,
 		parser:         parser,
 		chorusDetector: chorusDetector,
@@ -31,13 +34,22 @@ func NewLyricsService(
 }
 
 // AnalyzeSong performs complete song analysis
-func (ls *LyricsService) AnalyzeSong(ctx context.Context, track, artist string) (*model.SongAnalysisResponse, error) {
+func (ls *LyricsService) AnalyzeSong(
+	ctx context.Context,
+	track, artist string,
+) (*model.SongAnalysisResponse, error) {
 	startTime := time.Now()
 
-	// Fetch lyrics from LRCLib API
+	// Abort early if service is shutting down
+	select {
+	case <-ls.ctx.Done():
+		return nil, fmt.Errorf("service is shutting down: %w", ls.ctx.Err())
+	default:
+	}
+
+	// Fetch lyrics
 	lyricsData, err := ls.lyricsProvider.GetLyrics(ctx, track, artist)
 	if err != nil {
-		// Wrap with sentinel errors for proper error handling in handlers
 		if errors.Is(err, lrclib.ErrLyricsNotFound) {
 			return nil, fmt.Errorf("%w: %v", model.ErrNotFound, err)
 		}
@@ -47,7 +59,6 @@ func (ls *LyricsService) AnalyzeSong(ctx context.Context, track, artist string) 
 		return nil, fmt.Errorf("failed to fetch lyrics: %w", err)
 	}
 
-	// Build track info
 	trackInfo := model.Track{
 		ID:           lyricsData.TrackID,
 		Name:         lyricsData.TrackName,
@@ -57,22 +68,19 @@ func (ls *LyricsService) AnalyzeSong(ctx context.Context, track, artist string) 
 		Instrumental: lyricsData.Instrumental,
 	}
 
-	// If instrumental, return early (no lyrics to analyze)
+	// Instrumental track → return early
 	if lyricsData.Instrumental {
-		processingTime := time.Since(startTime).Milliseconds()
 		return &model.SongAnalysisResponse{
 			Track: trackInfo,
-			Metadata: model.Metadata{
-				Source:           model.SourceLRCLib,
-				Cached:           lyricsData.Cached,
-				ProcessingTimeMs: processingTime,
-				Timestamp:        time.Now(),
-				Message:          "Instrumental track - no lyrics available",
-			},
+			Metadata: ls.buildMetadata(
+				startTime,
+				lyricsData.Cached,
+				"Instrumental track - no lyrics available",
+			),
 		}, nil
 	}
 
-	// Parse lyrics (prefer synced over plain)
+	// Parse lyrics
 	lines, lyricsType, hasTimestamps, err := ls.parseLyrics(lyricsData)
 	if err != nil {
 		return nil, err
@@ -80,20 +88,16 @@ func (ls *LyricsService) AnalyzeSong(ctx context.Context, track, artist string) 
 
 	// No lyrics available
 	if lines == nil {
-		processingTime := time.Since(startTime).Milliseconds()
 		return &model.SongAnalysisResponse{
 			Track: trackInfo,
-			Metadata: model.Metadata{
-				Source:           model.SourceLRCLib,
-				Cached:           lyricsData.Cached,
-				ProcessingTimeMs: processingTime,
-				Timestamp:        time.Now(),
-				Message:          "No lyrics available for this track",
-			},
+			Metadata: ls.buildMetadata(
+				startTime,
+				lyricsData.Cached,
+				"No lyrics available for this track",
+			),
 		}, nil
 	}
 
-	// Build lyrics data
 	lyricsInfo := &model.LyricsData{
 		Type:          lyricsType,
 		HasTimestamps: hasTimestamps,
@@ -101,14 +105,11 @@ func (ls *LyricsService) AnalyzeSong(ctx context.Context, track, artist string) 
 		Lines:         lines,
 	}
 
-	// Detect chorus (graceful degradation - don't fail if chorus detection fails)
+	// Detect chorus (non-fatal)
 	var chorus *model.Chorus
 	if ls.chorusDetector != nil {
 		chorus = ls.chorusDetector.DetectChorus(lines)
 	}
-
-	// If chorus detection failed or is nil, return empty chorus result
-
 	if chorus == nil {
 		chorus = &model.Chorus{Detected: false}
 	}
@@ -117,28 +118,35 @@ func (ls *LyricsService) AnalyzeSong(ctx context.Context, track, artist string) 
 		Chorus: chorus,
 	}
 
-	// Calculate processing time
-	processingTime := time.Since(startTime).Milliseconds()
-
-	// Build complete response
-	response := &model.SongAnalysisResponse{
+	return &model.SongAnalysisResponse{
 		Track:     trackInfo,
 		Lyrics:    lyricsInfo,
 		Structure: structure,
-		Metadata: model.Metadata{
-			Source:           model.SourceLRCLib,
-			Cached:           lyricsData.Cached,
-			ProcessingTimeMs: processingTime,
-			Timestamp:        time.Now(),
-		},
-	}
-
-	return response, nil
+		Metadata:  ls.buildMetadata(startTime, lyricsData.Cached, ""),
+	}, nil
 }
 
-// parseLyrics handles lyrics parsing logic, returning lines, type, and timestamp flag
-func (ls *LyricsService) parseLyrics(lyricsData *model.LyricsSourceData) ([]model.LyricLine, string, bool, error) {
-	// Prefer synced lyrics over plain
+// buildMetadata centralizes metadata creation
+func (ls *LyricsService) buildMetadata(
+	startTime time.Time,
+	cached bool,
+	message string,
+) model.Metadata {
+	return model.Metadata{
+		Source:           model.SourceLRCLib,
+		Cached:           cached,
+		ProcessingTimeMs: time.Since(startTime).Milliseconds(),
+		Timestamp:        time.Now(),
+		Message:          message,
+	}
+}
+
+// parseLyrics handles lyrics parsing logic
+func (ls *LyricsService) parseLyrics(
+	lyricsData *model.LyricsSourceData,
+) ([]model.LyricLine, string, bool, error) {
+
+	// Prefer synced lyrics
 	if lyricsData.SyncedLyrics != "" {
 		lines, err := ls.parser.ParseSyncedLyrics(lyricsData.SyncedLyrics)
 		if err != nil {
@@ -147,6 +155,7 @@ func (ls *LyricsService) parseLyrics(lyricsData *model.LyricsSourceData) ([]mode
 		return lines, model.LyricsTypeSynced, true, nil
 	}
 
+	// Fallback to plain lyrics
 	if lyricsData.PlainLyrics != "" {
 		lines, err := ls.parser.ParsePlainLyrics(lyricsData.PlainLyrics)
 		if err != nil {
@@ -155,6 +164,5 @@ func (ls *LyricsService) parseLyrics(lyricsData *model.LyricsSourceData) ([]mode
 		return lines, model.LyricsTypePlain, false, nil
 	}
 
-	// No lyrics available
 	return nil, "", false, nil
 }

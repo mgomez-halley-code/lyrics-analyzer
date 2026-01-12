@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Go lyrics analyzer service
   lyrics-analyzer:
@@ -29,7 +27,7 @@ services:
 
       # Redis configuration (points to redis service)
       - REDIS_ADDR=redis:6379
-      - REDIS_PASSWORD=
+      - REDIS_PASSWORD=${REDIS_PASSWORD}  # Required: Load from .env file
       - REDIS_DB=0
     depends_on:
       redis:
@@ -43,25 +41,54 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'      # Limit to 1 CPU core
+          memory: 512M     # Limit to 512MB RAM
+        reservations:
+          cpus: '0.25'     # Reserve 0.25 CPU core
+          memory: 128M     # Reserve 128MB RAM
 
   # Redis cache service
   redis:
     image: redis:7-alpine
     container_name: lyrics-redis
-    ports:
-      - "6379:6379"
+    # SECURITY: Removed port exposure - only accessible within lyrics-net network
+    # If you need to access Redis from host for debugging, uncomment:
+    # ports:
+    #   - "127.0.0.1:6379:6379"  # Bind only to localhost, not 0.0.0.0
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lfu
+    command:
+      - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD}"
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lfu
     restart: unless-stopped
     networks:
       - lyrics-net
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "sh", "-c", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'      # Limit to 0.5 CPU core
+          memory: 384M     # Limit to 384MB RAM (256MB data + overhead)
+        reservations:
+          cpus: '0.1'      # Reserve 0.1 CPU core
+          memory: 128M     # Reserve 128MB RAM
 
 volumes:
   redis-data:

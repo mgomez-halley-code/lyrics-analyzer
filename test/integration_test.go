@@ -11,7 +11,18 @@ import (
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/model"
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/server"
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/service"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// setupTestServer creates a test HTTP server with the given mock client
+func setupTestServer(mockClient service.LyricsProvider) *httptest.Server {
+	parser := service.NewParser()
+	chorusDetector := service.NewChorusDetector()
+	svc := service.NewLyricsService(context.Background(), mockClient, parser, chorusDetector)
+	router := server.NewRouter(svc)
+	return httptest.NewServer(router)
+}
 
 type mockLyricsClient struct{}
 
@@ -30,79 +41,46 @@ func (m *mockLyricsClient) GetLyrics(ctx context.Context, track, artist string) 
 }
 
 func TestIntegration_SongAnalyze(t *testing.T) {
-	// Build service with mock client
-	mockClient := &mockLyricsClient{}
-	parser := service.NewParser()
-	chorusDetector := service.NewChorusDetector()
-	svc := service.NewLyricsService(mockClient, parser, chorusDetector)
-
-	// Build router and test server
-	router := server.NewRouter(svc)
-	ts := httptest.NewServer(router)
+	ts := setupTestServer(&mockLyricsClient{})
 	defer ts.Close()
 
 	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/song/analyze?track=MyTrack&artist=MyArtist", nil)
-	if err != nil {
-		t.Fatalf("failed to create request: %v", err)
-	}
+	require.NoError(t, err, "failed to create request")
 
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
+	require.NoError(t, err, "request failed")
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result model.SongAnalysisResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err, "failed to decode response")
 
-	if result.Track.Name != "MyTrack" {
-		t.Fatalf("unexpected track name: %s", result.Track.Name)
-	}
-
-	if result.Lyrics == nil || result.Lyrics.TotalLines == 0 {
-		t.Fatalf("expected parsed lyrics in response")
-	}
-
-	if result.Metadata.Source != model.SourceLRCLib {
-		t.Fatalf("unexpected metadata source: %s", result.Metadata.Source)
-	}
+	assert.Equal(t, "MyTrack", result.Track.Name)
+	assert.NotNil(t, result.Lyrics, "expected lyrics in response")
+	assert.Greater(t, result.Lyrics.TotalLines, 0, "expected parsed lyrics lines")
+	assert.Equal(t, model.SourceLRCLib, result.Metadata.Source)
 }
 
 func TestIntegration_Instrumental(t *testing.T) {
-	mock := &mockInstrumentalClient{}
-	parser := service.NewParser()
-	chorusDetector := service.NewChorusDetector()
-	svc := service.NewLyricsService(mock, parser, chorusDetector)
-
-	router := server.NewRouter(svc)
-	ts := httptest.NewServer(router)
+	ts := setupTestServer(&mockInstrumentalClient{})
 	defer ts.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/song/analyze?track=Inst&artist=NoLyrics", nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/song/analyze?track=Inst&artist=NoLyrics", nil)
+	require.NoError(t, err, "failed to create request")
+
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
+	require.NoError(t, err, "request failed")
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result model.SongAnalysisResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("decode failed: %v", err)
-	}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err, "failed to decode response")
 
-	if result.Lyrics != nil {
-		t.Fatalf("expected no lyrics for instrumental track")
-	}
+	assert.Nil(t, result.Lyrics, "expected no lyrics for instrumental track")
 }
 
 // mockInstrumentalClient returns an instrumental result
@@ -118,25 +96,18 @@ func (m *mockInstrumentalClient) GetLyrics(ctx context.Context, track, artist st
 }
 
 func TestIntegration_UpstreamError(t *testing.T) {
-	mock := &mockErrorClient{}
-	parser := service.NewParser()
-	chorusDetector := service.NewChorusDetector()
-	svc := service.NewLyricsService(mock, parser, chorusDetector)
-
-	router := server.NewRouter(svc)
-	ts := httptest.NewServer(router)
+	ts := setupTestServer(&mockErrorClient{})
 	defer ts.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/song/analyze?track=Err&artist=Provider", nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/song/analyze?track=Err&artist=Provider", nil)
+	require.NoError(t, err, "failed to create request")
+
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
+	require.NoError(t, err, "request failed")
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		t.Fatalf("expected non-200 status for upstream error")
-	}
+	assert.NotEqual(t, http.StatusOK, resp.StatusCode, "expected non-200 status for upstream error")
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
 type mockErrorClient struct{}

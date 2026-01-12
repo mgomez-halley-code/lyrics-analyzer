@@ -9,14 +9,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/cache"
 	client "github.com/mgomez-halley-code/lyrics-analyzer.git/internal/client"
 	lrclib "github.com/mgomez-halley-code/lyrics-analyzer.git/internal/client/lrclib"
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/config"
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/server"
 	"github.com/mgomez-halley-code/lyrics-analyzer.git/internal/service"
-
-	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -29,11 +29,14 @@ func main() {
 		log.Fatalf("failed to load configuration: %v", err)
 	}
 
-	// 1. Initialize dependencies
-	// LRCLib HTTP client
-	rawClient := lrclib.NewClient(cfg.LRCLibBaseURL, cfg.LRCLibTimeout)
+	// ─────────────────────────────────────────────
+	// Initialize dependencies
+	// ─────────────────────────────────────────────
 
-	// Wrap with retry decorator (use config values)
+	// LRCLib HTTP client
+	lrclibClient := lrclib.NewClient(cfg.LRCLibBaseURL, cfg.LRCLibTimeout)
+
+	// Wrap with retry decorator
 	retryCfg := client.RetryConfig{
 		MaxRetries:     cfg.RetryMaxRetries,
 		InitialBackoff: cfg.RetryBackoff,
@@ -41,7 +44,7 @@ func main() {
 		Multiplier:     cfg.RetryMultiplier,
 	}
 
-	retryClient := client.NewRetryDecorator(rawClient, retryCfg)
+	retryClient := client.NewRetryDecorator(lrclibClient, retryCfg)
 
 	// Initialize cache
 	cacheInstance, err := cache.New(cache.Config{
@@ -55,39 +58,68 @@ func main() {
 	}
 	defer cacheInstance.Close()
 
-	// Wrap client with caching layer
-	cachingProvider := service.NewCachingProvider(retryClient, cacheInstance, cfg.CacheTTL)
+	// Wrap provider with caching layer
+	cachingProvider := service.NewCachingProvider(
+		retryClient,
+		cacheInstance,
+		cfg.CacheTTL,
+	)
 
-	// Parser and chorus detector used by the service
+	// Parser and chorus detector
 	parser := service.NewParser()
 	chorusDetector := service.NewChorusDetector()
 
-	// Service (use caching provider)
-	svc := service.NewLyricsService(cachingProvider, parser, chorusDetector)
+	// Service lifecycle context
+	serviceCtx, serviceCancel := context.WithCancel(context.Background())
+	defer serviceCancel()
 
-	// Build router and server
-	r := server.NewRouter(svc)
-	srv := server.NewServer(cfg.ServerAddr, r)
+	// Lyrics service
+	svc := service.NewLyricsService(
+		serviceCtx,
+		cachingProvider,
+		parser,
+		chorusDetector,
+	)
 
-	// Start server in background
+	// HTTP server
+	router := server.NewRouter(svc)
+	srv := server.NewServer(cfg.ServerAddr, router)
+
+	// Channel to capture server errors
+	serverErr := make(chan error, 1)
+
+	// Start server
 	go func() {
 		log.Printf("starting server on %s", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			serverErr <- err
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server with a timeout
+	// ─────────────────────────────────────────────
+	// Graceful shutdown
+	// ─────────────────────────────────────────────
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Println("shutting down server...")
 
+	select {
+	case sig := <-quit:
+		log.Printf("received signal %s, shutting down", sig)
+
+	case err := <-serverErr:
+		log.Printf("server error: %v", err)
+	}
+
+	// Stop service work
+	serviceCancel()
+
+	// Allow in-flight requests to finish
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("server forced to shutdown: %v", err)
+		log.Printf("server forced to shutdown: %v", err)
 	}
 
 	log.Println("server exited properly")
