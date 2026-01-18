@@ -2,7 +2,9 @@ package model
 
 import "time"
 
+// ─────────────────────────────────────────────
 // SongAnalysisResponse is the main API response
+// ─────────────────────────────────────────────
 type SongAnalysisResponse struct {
 	Track     Track       `json:"track"`
 	Lyrics    *LyricsData `json:"lyrics,omitempty"`
@@ -20,7 +22,18 @@ type Metadata struct {
 	Message          string    `json:"message,omitempty"`
 }
 
+// ─────────────────────────────────────────────
+// HealthResponse represents health check response
+// ─────────────────────────────────────────────
+type HealthResponse struct {
+	Status    string    `json:"status"`
+	Timestamp time.Time `json:"timestamp"`
+	Version   string    `json:"version"`
+}
+
+// ─────────────────────────────────────────────
 // ErrorResponse represents an error response
+// ─────────────────────────────────────────────
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
@@ -30,11 +43,4 @@ type ErrorDetail struct {
 	Code    string      `json:"code"`
 	Message string      `json:"message"`
 	Details interface{} `json:"details,omitempty"`
-}
-
-// HealthResponse represents health check response
-type HealthResponse struct {
-	Status    string    `json:"status"`
-	Timestamp time.Time `json:"timestamp"`
-	Version   string    `json:"version"`
 }

@@ -2,7 +2,7 @@ package service
 
 import "regexp"
 
-// Parser handles lyrics parsing and implements the LyricsParser interface
+// Parser handles lyrics parsing
 type Parser struct {
 	timestampRegex *regexp.Regexp
 }

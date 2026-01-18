@@ -308,6 +308,56 @@ Integrate **LLM APIs** (Claude, OpenAI, etc.) to classify songs by:
 
 All enhancements follow the existing provider pattern - simply implement the appropriate interface and register with the service layer.
 
+## AI Usage
+
+### Philosophy
+AI tools (Claude Code) were used strategically to assist with specific aspects of development while maintaining ownership of architectural decisions and core implementation logic.
+
+### Where AI Was Used
+
+1. **Code Review**
+   - Validated timeout and context cancellation patterns
+   - Using AI to check for misspellings in comments and log messages to maintain professional documentation.
+
+2. **Comments Assistance**
+   - Updated code comments to reflect current implementation
+   - Grammar and spelling corrections in documentation and comments
+
+3. **Unit Tests/ Integration test**
+   - Using AI for tests allowed for higher coverage in less time, but required manual verification to ensure table-driven tests were used where feasible and covered the most relevant cases.
+
+4. **README Files**
+   - Used AI to create README files based on specific input like main points to cover and basic definitions for each section.
+
+5. **Jitter Retry Calculation**
+   - Generated jitter calculation function based on AWS best practices: https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+
+7. **Redis Cache Wrapper**
+   - Generated initial Redis boilerplate which was then manually refactored to fit the internal package structure.
+
+7. **Infrastructure Configuration**
+   - Generated Dockerfile with multi-stage builds for optimal image size
+   - Created docker-compose.yml files for dev/prod environments
+   - Set up GitHub Actions CI/CD workflow (.github/workflows/ci.yml)
+   - All configurations were reviewed and customized for project requirements
+
+### What AI Did NOT Do
+
+- **Architecture decisions**: Final decisions on package structure, dependency injection approach
+- **Core implementation and architecture design**: Handlers, Client, Service and Server separation
+- **Algorithm design**: Chorus detection, lyrics parsing algorithms
+- **Testing strategy**: Test cases and coverage decisions
+- **Cache architecture design**: Decorator pattern, SHA-256 key hashing strategy, async writes, graceful degradation logic
+- **Error handling strategy**: Type-safe error wrapping, errors.Is() pattern implementation
+- **Retry logic design**: Exponential backoff configuration, shouldRetry decision logic
+- **DevOps strategy**: Decision to use Docker, Docker Compose, and CI/CD integration
+
+### Impact on Workflow
+
+- **Time saved**: Reduced time spent on documentation, DevOps and tests
+- **Debugging efficiency**: Accelerated troubleshooting
+- **Trade-offs**: While AI sped up the initial generation of tests and infrastructure code, it required a significant time investment in manual review and right prompts to ensure the generated code adhered to the project's specific architectural patterns and security best practices.
+
 ## License
 
 This project is provided as-is for development and demonstration purposes.

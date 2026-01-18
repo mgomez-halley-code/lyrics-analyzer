@@ -19,16 +19,6 @@ type RetryConfig struct {
 	Multiplier     float64
 }
 
-// DefaultRetryConfig returns sensible defaults for retry behavior
-func DefaultRetryConfig() RetryConfig {
-	return RetryConfig{
-		MaxRetries:     3,
-		InitialBackoff: 100 * time.Millisecond,
-		MaxBackoff:     5 * time.Second,
-		Multiplier:     2.0,
-	}
-}
-
 // RetryDecorator wraps a LyricsProvider with retry logic and exponential backoff
 type RetryDecorator struct {
 	client service.LyricsProvider
